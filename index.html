@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Attendance System</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    video { width: 300px; max-width: 100%; border: 1px solid #ccc; margin-bottom: 1rem; }
+    #output { font-size: 1.25rem; color: #333; margin-bottom: 1rem; }
+    #controls button { margin: 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>QR Attendance System</h1>
+  <video id="video" muted playsinline></video>
+  <div id="output">Waiting for QR code…</div>
+  <div id="controls">
+    <button id="saveAttendance" disabled>Save Attendance</button>
+  </div>
+
+  <script type="module">
+    import QrScanner from 'https://unpkg.com/qr-scanner@1.4.2/qr-scanner.min.js';
+    QrScanner.WORKER_PATH = 'https://unpkg.com/qr-scanner@1.4.2/qr-scanner-worker.min.js';
+
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzO_Z9rSYT5dbtdyjV6r00ty1DJ0QVmD6C7SfyuQBjKl1YZ2P5DUc27SHO403YQ5_HV/exec';  // Python backend endpoint
+    let scannedData = [];
+
+    const video = document.getElementById('video');
+    const output = document.getElementById('output');
+    const saveBtn = document.getElementById('saveAttendance');
+
+    // Initialize QR scanner
+    const scanner = new QrScanner(video, result => {
+      output.textContent = `Scanned: ${result}`;
+      if (!scannedData.includes(result)) scannedData.push(result);
+      saveBtn.disabled = scannedData.length === 0;
+    });
+    scanner.start().catch(err => {
+      output.textContent = `Error initializing scanner: ${err}`;
+      console.error(err);
+    });
+
+    // Save scanned attendance to Python API
+    async function saveAttendance() {
+      if (scannedData.length === 0) return alert('No attendance data to save.');
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: scannedData })
+        });
+        const json = await response.json();
+        if (response.ok && json.status === 'success') {
+          alert(`Appended ${json.appended || json.appended || json.added || 0} records successfully.`);
+          scannedData = [];
+          saveBtn.disabled = true;
+          output.textContent = 'Waiting for QR code…';
+        } else {
+          alert(`Error saving attendance: ${json.message || json.error}`);
+        }
+      } catch (err) {
+        console.error(err);
+        alert(`Request failed: ${err}`);
+      }
+    }
+
+    saveBtn.addEventListener('click', saveAttendance);
+  </script>
+</body>
+</html>
